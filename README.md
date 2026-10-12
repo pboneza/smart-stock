@@ -16,7 +16,7 @@ Development follows a single-product-first approach:
 2. Apply the validated workflow to a small portfolio of products, initially making replenishment decisions independently for each product.
 3. Evaluate performance for individual products and aggregate inventory costs across the portfolio.
 
-Shared purchasing budgets, storage constraints, and joint inventory optimisation are possible later extensions.
+Shared purchasing budgets, storage constraints, and joint inventory optimisation are later extensions.
 
 ### Initial inventory setting
 
@@ -34,7 +34,7 @@ The exact product, lead time, cost values, and inventory policy will be selected
 
 The project uses the UCI Online Retail dataset.
 
-Initial exploration will examine sales frequency, history length, missing values, cancellations, returns, and unusual transactions. Product selection will follow this exploration, beginning with a product that has sufficient history and reasonably regular sales.
+Initial exploration examines sales frequency, history length, missing values, cancellations, returns, and unusual transactions. Product selection follows this exploration, beginning with a product that has sufficient history and reasonably regular sales.
 
 The preparation workflow will create a daily product-level series and document how days without recorded sales are handled.
 
@@ -48,7 +48,7 @@ Historical stock levels, stockouts, replenishment records, and inventory costs w
 
 | Phase | Main activities | Expected outcome |
 |---|---|---|
-| 1. Problem definition and data exploration | Define the decision setting, inspect transactions, and select an initial product | Documented scope and data preparation rules |
+| 1. Problem definition and data exploration | Define the decision setting, inspect transactions, and select one initial product | Documented scope and data preparation rules |
 | 2. Daily dataset and baseline forecasts | Aggregate sales, create features, and establish simple forecasting benchmarks | Reproducible daily dataset and baseline results |
 | 3. Forecasting and uncertainty | Develop models and assess demand uncertainty using chronological validation | Forecasts and uncertainty estimates for inventory decisions |
 | 4. Inventory simulation | Simulate replenishment and compare inventory policies under explicit assumptions | Cost and service evaluation against baseline policies |
@@ -58,6 +58,7 @@ Historical stock levels, stockouts, replenishment records, and inventory costs w
 AWS implementation will be introduced incrementally as the underlying workflow is validated. Service choices and deployment details will be documented as they are implemented.
 
 ## Evaluation
+The project will be regularly evaluated across the two defined objectives: Forecasting and Inventory optimization decisions.
 
 ### Forecasting
 
@@ -74,9 +75,3 @@ AWS implementation will be introduced incrementally as the underlying workflow i
 - Examine sensitivity to cost assumptions and replenishment lead times.
 
 For multiple products, report both individual results and combined costs. Portfolio fulfilment will be calculated from total fulfilled units divided by total simulated demanded units, rather than an unweighted average of product percentages.
-
-## Current status
-
-The project is in its initial planning stage. Data preparation, forecasting, inventory simulation, and AWS deployment have not yet been implemented.
-
-**First milestone:** build and validate a reproducible daily sales dataset for one suitable product.
