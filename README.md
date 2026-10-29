@@ -1,77 +1,99 @@
-# Smart Stock
+# Smart Stock: Demand Forecasting and Inventory Decisions on AWS
 
-An end-to-end AWS machine learning and decision analysis project that uses historical retail transactions to forecast daily sales as a proxy for demand and support inventory replenishment decisions.
+A single-product machine learning project that connects retail sales forecasting to simulated replenishment decisions, with batch inference, persistent inventory state, retry protection, and CloudWatch monitoring.
 
-## Objective
+**Business question:** Can historical sales forecasts support replenishment decisions that balance the cost of lost sales against the cost of holding excess inventory?
 
-Evaluate whether forecasts and their uncertainty can support inventory policies that reduce total holding, shortage, and ordering costs compared with baseline approaches.
+The project evaluates two separate outcomes: forecast accuracy and inventory performance. A lower forecast error does not automatically imply a lower inventory cost.
 
-Forecast accuracy and inventory performance will be evaluated separately: a more accurate forecast does not necessarily produce a lower-cost inventory decision.
+## Portfolio overview
 
-## Project scope
+| Area | Implementation |
+|---|---|
+| Data | UCI Online Retail; product `22041`; daily sales as a proxy for demand |
+| Forecasting | Seven direct Ridge models, one for each horizon from 1 to 7 days |
+| Execution | Daily batch inference in an EC2 Python environment |
+| Persistence | S3 model artifacts, versioned forecasts, decision evidence, and replay checkpoint |
+| Replenishment | Daily order-up-to policy using forecasts, selected safety stock, on-hand stock, and confirmed pipeline |
+| Automation | EC2 cron with a local lock and stable daily execution IDs |
+| Monitoring | CloudWatch logs, custom metrics, dashboard, and alarms |
+| Demonstration | Historical replay: one invocation advances one dataset day |
 
-Development follows a single-product-first approach:
+The repository includes the replay and monitoring implementations recovered from the project packages. A successful cloud execution, final evaluation tables, and the demonstration recording should be linked using the [release evidence checklist](docs/results.md). The presence of implementation code alone does not verify deployment status.
 
-1. Develop and validate the complete data preparation, forecasting, inventory simulation, and AWS workflow for one product.
-2. Apply the validated workflow to a small portfolio of products, initially making replenishment decisions independently for each product.
-3. Evaluate performance for individual products and aggregate inventory costs across the portfolio.
+## From sales to a decision
 
-Shared purchasing budgets, storage constraints, and joint inventory optimisation are later extensions.
+```mermaid
+flowchart TD
+    A["Prepared daily sales"] --> B["Frozen Ridge model from S3"]
+    B --> C["Seven-day batch forecast"]
+    C --> D["Replenishment decision"]
+    E["Opening inventory and confirmed orders"] --> D
+    D --> F["Reveal historical demand and simulate fulfilment"]
+    F --> G["Conditional S3 checkpoint commit"]
+    G --> E
+    G --> H["CloudWatch logs, metrics and alarms"]
+```
 
-### Initial inventory setting
+At the beginning of simulated day *t*, the forecast uses sales observed through *t − 1*. Receipts are applied, the policy calculates an order, and only then is day *t* historical demand revealed. Unfulfilled units are treated as lost sales. No purchase orders are sent to suppliers.
 
-- One stock location.
-- Daily sales aggregation and daily inventory review.
-- Next-day forecasting initially, extending to demand over the replenishment lead time.
-- A fixed, explicitly assumed replenishment lead time.
-- Inventory decisions that account for available stock and outstanding orders.
-- Unfulfilled demand treated as lost sales initially.
-- Explicit holding, shortage, and ordering cost assumptions, evaluated through sensitivity analysis.
+A seven-day forecast is generated daily. Forecasts from different origins remain separate estimates. They are never added together across origins; the replay uses the run associated with its current decision.
 
-The exact product, lead time, cost values, and inventory policy will be selected and documented during development.
+## Modelling decisions
 
-## Data
+- Start with one product to validate the entire workflow before scaling.
+- Use chronological development and evaluation periods.
+- Select Ridge after comparing forecasting alternatives; retain a simple model suitable for limited product history.
+- Train a separate model for each horizon. The deployed batch path uses direct forecasts, without feeding predictions back as observations.
+- Reuse training feature functions during inference and check the model's feature contract and scikit-learn version.
+- Keep the training cutoff at or before the forecast origin and exclude observations after the origin.
+- Select inventory policy settings on validation data, then freeze them before a held-out comparison.
 
-The project uses the UCI Online Retail dataset.
+The replay package uses the May-trained validation candidate. It demonstrates integration and does not establish reproduction of the earlier final-model test results. See [evaluation and evidence](docs/results.md).
 
-Initial exploration examines sales frequency, history length, missing values, cancellations, returns, and unusual transactions. Product selection follows this exploration, beginning with a product that has sufficient history and reasonably regular sales.
+## Inventory policy
 
-The preparation workflow will create a daily product-level series and document how days without recorded sales are handled.
+Daily review protects the period from *t* through *t + L*, including the review day. With a three-day lead time, the policy uses forecast horizons 1–4.
 
-### Interpretation and limitations
+```text
+inventory position = stock after today's receipts + remaining confirmed pipeline
+order-up-to target = forecast sales over L + 1 days + selected safety stock
+order quantity = pack size × ceil(max(0, target − inventory position) / pack size)
+```
 
-Observed sales may differ from underlying demand when products are unavailable. Sales will therefore be used as a proxy for demand, with this limitation stated explicitly.
+All confirmed outstanding quantities count in inventory position, matching the project simulator. Orders placed on day *t* arrive at the start of *t + L*.
 
-Historical stock levels, stockouts, replenishment records, and inventory costs will not be assumed to be available. Missing operational information will be represented through documented simulation assumptions. Inventory results will describe performance under those assumptions rather than verified savings in an actual retail operation.
+Example replay assumptions are 28 initial units, a three-day lead time, pack size 1, holding cost 0.1 per unit per day, lost-sales cost 5 per unit, and fixed order cost 0. These are hypothetical simulation parameters, with no asserted currency or observed retailer cost.
 
-## Development plan
+## Reliability and monitoring
 
-| Phase | Main activities | Expected outcome |
-|---|---|---|
-| 1. Problem definition and data exploration | Define the decision setting, inspect transactions, and select one initial product | Documented scope and data preparation rules |
-| 2. Daily dataset and baseline forecasts | Aggregate sales, create features, and establish simple forecasting benchmarks | Reproducible daily dataset and baseline results |
-| 3. Forecasting and uncertainty | Develop models and assess demand uncertainty using chronological validation | Forecasts and uncertainty estimates for inventory decisions |
-| 4. Inventory simulation | Simulate replenishment and compare inventory policies under explicit assumptions | Cost and service evaluation against baseline policies |
-| 5. AWS lifecycle | Implement data preparation, training, model storage, batch inference, and monitoring on AWS | Reproducible end-to-end cloud workflow |
-| 6. Product portfolio evaluation | Apply the workflow to additional products and aggregate results | Product-level findings and combined inventory performance |
+Forecast folders receive `_SUCCESS.json` only after their other artifacts are uploaded. Each includes predictions, feature snapshots, observed history, and a manifest with hashes and model metadata.
 
-AWS implementation will be introduced incrementally as the underlying workflow is validated. Service choices and deployment details will be documented as they are implemented.
+The replay commits inventory state, simulated orders, and its execution ledger in one conditional S3 checkpoint update. Reusing a committed execution ID returns a no-op. A new ID advances another historical day. Only day results referenced by the committed ledger should be aggregated.
 
-## Evaluation
-The project will be regularly evaluated across the two defined objectives: Forecasting and Inventory optimization decisions.
+CloudWatch reports operational health, inventory quantities, simulated costs, and forecast errors by horizon after target sales become available. A watchdog checks progress and heartbeat absence. CloudWatch is the operational view; the S3 checkpoint is the authoritative business record.
 
-### Forecasting
+See [architecture](docs/architecture.md), [reproduction guide](docs/reproduction.md), and the [four-minute demonstration](docs/demo.md).
 
-- Use chronological training, validation, and test periods.
-- Prevent future information from entering features or model selection.
-- Compare models with simple forecasting baselines.
-- Assess forecast error and the quality of uncertainty estimates.
+## Repository guide
 
-### Inventory decisions
+| Path | Purpose |
+|---|---|
+| `notebooks/` | Existing exploration and forecasting work; feature notebook is currently empty |
+| `scripts/train.py` | Fit the seven direct Ridge models and save the artifact metadata |
+| `scripts/batch_forecast.py` | Validate inputs, generate forecasts, and publish a versioned S3 run |
+| `scripts/replenish.py` | Produce a replenishment recommendation from a completed forecast |
+| `scripts/daily_replay.py` | Orchestrate a historical day and commit the next inventory state |
+| `scripts/cloudwatch_replay.py` | Run, probe, and watchdog monitoring modes |
+| `scripts/setup_cloudwatch.py` | Create monitoring resources and generate publishing permissions |
+| `scripts/*.sh` | EC2 scheduling wrappers |
+| `config/*_example.json` | Example configuration and simulated startup stock |
+| `docs/` | Architecture, reproduction, evaluation, and demo guidance |
 
-- Compare forecast-based policies with baseline inventory policies using the same products, evaluation periods, and simulation assumptions.
-- Report holding, shortage, ordering, and total costs.
-- Report service outcomes, including the proportion of demand fulfilled.
-- Examine sensitivity to cost assumptions and replenishment lead times.
+## Limits and next steps
 
-For multiple products, report both individual results and combined costs. Portfolio fulfilment will be calculated from total fulfilled units divided by total simulated demanded units, rather than an unweighted average of product percentages.
+Historical sales are an imperfect proxy for demand: the dataset does not provide the stock availability needed to identify demand lost before sales were recorded. Inventory state, lead times, and costs are simulated. Findings are conditional on these assumptions and cannot be presented as verified commercial savings.
+
+The current workflow is single-product and deterministic. It does not provide probabilistic forecasts, automated retraining, a model registry, supplier integration, or an always-available inference endpoint. EC2 must be running for cron to execute. Multi-product evaluation, uncertainty estimation, sensitivity analysis, and AWS-native orchestration remain extensions.
+
+Data source: [UCI Online Retail](https://archive.ics.uci.edu/dataset/352/online+retail). Dataset redistribution and attribution should follow the source terms. No repository software licence has been selected in this documentation update.

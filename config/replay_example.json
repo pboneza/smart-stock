@@ -1,0 +1,17 @@
+{
+  "product_id": "22041",
+  "region": "eu-north-1",
+  "model_s3": "s3://YOUR_BUCKET/models/ridge_validation/direct_ridge.joblib",
+  "data": "data/processed/product_22041_daily_sales.csv",
+  "initial_inventory": "config/inventory_example.json",
+  "selected_policies": "config/selected_policies.csv",
+  "scenario": "medium_shortage",
+  "lead_time": 3,
+  "pack_size": 1,
+  "holding_cost_per_unit_day": 0.1,
+  "lost_unit_cost": 5.0,
+  "order_cost": 0.0,
+  "state_s3": "s3://YOUR_BUCKET/replay/demo-v1/state.json",
+  "output_s3": "s3://YOUR_BUCKET/replay/demo-v1",
+  "local_output": "results/daily_replay"
+}
