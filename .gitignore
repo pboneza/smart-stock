@@ -1,5 +1,15 @@
 # data files
 data/*
+*.csv
+*.json
+
+# Generated model files
+*.joblib
+*.pkl
+*.pickle
+
+# draft files
+misc/*
 
 # Python
 __pycache__/
@@ -18,4 +28,12 @@ venv/
 .env/
 .venv/
 env/
+
+# Environment variables and credentials
+.env 
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
 
